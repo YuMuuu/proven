@@ -1,0 +1,10 @@
+name = "proven"
+version = "0.1.0"
+defaultTargets = ["proven"]
+
+[[lean_lib]]
+name = "Proven"
+
+[[lean_exe]]
+name = "proven"
+root = "Main"
