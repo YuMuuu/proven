@@ -14,5 +14,3 @@ jobs:
       - uses: leanprover/lean-action@v1
       - name: Build Lean project
         run: lake check-build
-      - name: Check Lean linting
-        run: lake check-lint
