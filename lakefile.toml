@@ -1,9 +1,14 @@
 name = "proven"
 version = "0.1.0"
-defaultTargets = ["proven"]
+defaultTargets = ["proven", "LTL"]
 
 [[lean_lib]]
 name = "Proven"
+roots = ["Proven"]
+
+[[lean_lib]]
+name = "LTL"
+root = "."
 
 [[lean_exe]]
 name = "proven"
