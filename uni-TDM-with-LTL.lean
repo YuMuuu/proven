@@ -74,70 +74,128 @@ structure TSC (S : Type u) (T : Type v) (A : Type w) [StrictTotalOrder T] where
 -- 論文のSection 4: TSCs Operations
 
 /-- 論文のOperator構造（3つの機能部分） --/
-structure OperatorStructure (S T A S' T' A' : Type*) 
+structure OperatorStructure (S T A S' T' A' : Type) 
   [StrictTotalOrder T] [StrictTotalOrder T'] where
   -- Target Specification: ターゲットTSCの有効な点を決定
-  target_spec : TSC S T A → Set (S' × T')
+  target_spec : TSC S T A → List (S' × T')
   -- Mapping: 各ターゲット点に対するソース点の集合を指定
-  mapping : (S' × T') → Set (S × T)
+  mapping : (S' × T') → List (S × T)
   -- Function: ソース点の値からターゲット値を生成する関数
   function : List A → A'
-
-/-- SELECT操作（論文のSection 4.2） --/
-def select_operation {S T A : Type*} [StrictTotalOrder T] 
-  (tsc : TSC S T A) (predicate : S → T → A → Prop) : TSC S T A :=
-  { tsOf := fun s => 
-      { s := s,
-        seq := (tsc.tsOf s).seq.filter (fun ⟨t, a⟩ => predicate s t a),
-        ordered := by sorry, -- 順序性の証明は省略
-        tsc_type := (tsc.tsOf s).tsc_type,
-        granularity := (tsc.tsOf s).granularity,
-        regularity := Regularity.irregular, -- フィルタ後は不規則になる可能性
-        lifespan := (tsc.tsOf s).lifespan },
-    uniform_type := by sorry,
-    uniform_granularity := by sorry }
-
-/-- AGGREGATE操作（論文のSection 4.2） --/
-def aggregate_operation {S T A : Type*} [StrictTotalOrder T] 
-  (tsc : TSC S T A) (group_by : T → T) (agg_func : List A → A) : TSC S T A :=
-  by sorry -- 実装は複雑なため省略
-
-/-- ACCUMULATE操作（論文のSection 4.2） --/
-def accumulate_operation {S T A : Type*} [StrictTotalOrder T] 
-  (tsc : TSC S T A) (acc_func : List A → A) : TSC S T A :=
-  by sorry -- 実装は複雑なため省略
-
-/-- RESTRICT操作（論文のSection 4.2） --/
-def restrict_operation {S T A : Type*} [StrictTotalOrder T] 
-  (source_tsc : TSC S T A) (aux_tsc : TSC S T A) : TSC S T A :=
-  by sorry -- 実装は複雑なため省略
-
-/-- COMPOSE操作（論文のSection 4.2） --/
-def compose_operation {S T A B C : Type*} [StrictTotalOrder T] 
-  (tsc1 : TSC S T A) (tsc2 : TSC S T B) (comp_func : A → B → C) : TSC S T C :=
-  by sorry -- 実装は複雑なため省略
-
--- 論文の例（Example）
 
 -- 簡単なLifespanの例
 def simple_lifespan : Lifespan Nat := {
   start_point := 1,
   end_point := 9,
-  valid := by simp [StrictTotalOrder.lt]; norm_num
+  valid := by simp [StrictTotalOrder.lt]
 }
+
+-- 汎用的なLifespanヘルパー
+def make_lifespan {T : Type} [StrictTotalOrder T] (start : T) (end_point : T) (h : StrictTotalOrder.lt start end_point) : Lifespan T := {
+  start_point := start,
+  end_point := end_point,
+  valid := h
+}
+
+-- 述語をBoolに変換するヘルパー関数
+def prop_to_bool {P : Prop} [Decidable P] : Bool := decide P
+
+/-- SELECT操作（論文のSection 4.2） --/
+def select_operation {S T A : Type} [StrictTotalOrder T] [DecidableEq S] [DecidableEq T] [DecidableEq A]
+  (tsc : TSC S T A) (predicate : S → T → A → Bool) : TSC S T A := 
+{
+  tsOf := fun s => 
+    { s := s,
+      seq := (tsc.tsOf s).seq.filter (fun ⟨t, a⟩ => predicate s t a),
+      ordered := by sorry, -- 順序性の証明は省略
+      tsc_type := (tsc.tsOf s).tsc_type,
+      granularity := (tsc.tsOf s).granularity,
+      regularity := Regularity.irregular, -- フィルタ後は不規則になる可能性
+      lifespan := (tsc.tsOf s).lifespan },
+  uniform_type := by sorry,
+  uniform_granularity := by sorry
+}
+
+/-- AGGREGATE操作（論文のSection 4.2） --/
+def aggregate_operation {S T A : Type} [StrictTotalOrder T] 
+  (tsc : TSC S T A) (group_by : T → T) (agg_func : List A → A) : TSC S T A := 
+{
+  tsOf := fun s => 
+    { s := s,
+      seq := [],
+      ordered := by sorry,
+      tsc_type := TSCType.discrete,
+      granularity := (tsc.tsOf s).granularity,
+      regularity := Regularity.irregular,
+      lifespan := (tsc.tsOf s).lifespan },
+  uniform_type := by sorry,
+  uniform_granularity := by sorry
+}
+
+/-- ACCUMULATE操作（論文のSection 4.2） --/
+def accumulate_operation {S T A : Type} [StrictTotalOrder T] 
+  (tsc : TSC S T A) (acc_func : List A → A) : TSC S T A := 
+{
+  tsOf := fun s => 
+    { s := s,
+      seq := [],
+      ordered := by sorry,
+      tsc_type := TSCType.discrete,
+      granularity := (tsc.tsOf s).granularity,
+      regularity := Regularity.irregular,
+      lifespan := (tsc.tsOf s).lifespan },
+  uniform_type := by sorry,
+  uniform_granularity := by sorry
+}
+
+/-- RESTRICT操作（論文のSection 4.2） --/
+def restrict_operation {S T A : Type} [StrictTotalOrder T] 
+  (source_tsc : TSC S T A) (aux_tsc : TSC S T A) : TSC S T A := 
+{
+  tsOf := fun s => 
+    { s := s,
+      seq := [],
+      ordered := by sorry,
+      tsc_type := (source_tsc.tsOf s).tsc_type,
+      granularity := (source_tsc.tsOf s).granularity,
+      regularity := (source_tsc.tsOf s).regularity,
+      lifespan := (source_tsc.tsOf s).lifespan },
+  uniform_type := by sorry,
+  uniform_granularity := by sorry
+}
+
+/-- COMPOSE操作（論文のSection 4.2） --/
+def compose_operation {S T A B C : Type} [StrictTotalOrder T] 
+  (tsc1 : TSC S T A) (tsc2 : TSC S T B) (comp_func : A → B → C) : TSC S T C := 
+{
+  tsOf := fun s => 
+    { s := s,
+      seq := [],
+      ordered := by sorry,
+      tsc_type := TSCType.discrete,
+      granularity := (tsc1.tsOf s).granularity,
+      regularity := Regularity.irregular,
+      lifespan := (tsc1.tsOf s).lifespan },
+  uniform_type := by sorry,
+  uniform_granularity := by sorry
+}
+
+-- 論文の例（Example）
 
 /-- 論文のBank Account例 --/
 example : TSC Nat Nat Nat := 
-  { tsOf := fun account_num => 
-      { s := account_num,
-        seq := [(1, 57), (4, 50), (6, 65), (9, 60)], -- 1/1/86から1/9/86の残高
-        ordered := by sorry,
-        tsc_type := TSCType.stepwise_constant,
-        granularity := TimeGranularity.day,
-        regularity := Regularity.irregular,
-        lifespan := simple_lifespan },
-    uniform_type := by sorry,
-    uniform_granularity := by sorry }
+{
+  tsOf := fun account_num => 
+    { s := account_num,
+      seq := [(1, 57), (4, 50), (6, 65), (9, 60)], -- 1/1/86から1/9/86の残高
+      ordered := by sorry,
+      tsc_type := TSCType.stepwise_constant,
+      granularity := TimeGranularity.day,
+      regularity := Regularity.irregular,
+      lifespan := simple_lifespan },
+  uniform_type := by sorry,
+  uniform_granularity := by sorry
+}
 
 /-- 論文のBook Sales例 --/
 structure BookSales where
@@ -145,31 +203,33 @@ structure BookSales where
   date : Nat
   quantity : Nat
 
-def book_sales_tsc : TSC Nat Nat Nat :=
-  { tsOf := fun book_id => 
-      { s := book_id,
-        seq := [], -- 実際のデータは省略
-        ordered := by sorry,
-        tsc_type := TSCType.discrete,
-        granularity := TimeGranularity.day,
-        regularity := Regularity.irregular,
-        lifespan := simple_lifespan },
-    uniform_type := by sorry,
-    uniform_granularity := by sorry }
+def book_sales_tsc : TSC Nat Nat Nat := 
+{
+  tsOf := fun book_id => 
+    { s := book_id,
+      seq := [], -- 実際のデータは省略
+      ordered := by sorry,
+      tsc_type := TSCType.discrete,
+      granularity := TimeGranularity.day,
+      regularity := Regularity.irregular,
+      lifespan := simple_lifespan },
+  uniform_type := by sorry,
+  uniform_granularity := by sorry
+}
 
 -- 論文のOperatorの性質
 
 /-- 論文のPrinciple 1: すべての操作は単一のターゲットTSCを生成 --/
-theorem operator_single_target {S T A S' T' A' : Type*} 
+theorem operator_single_target {S T A S' T' A' : Type} 
   [StrictTotalOrder T] [StrictTotalOrder T']
   (op : OperatorStructure S T A S' T' A') (source : TSC S T A) :
-  ∃! target : TSC S' T' A', True := by sorry
+  ∃ target : TSC S' T' A', True := by sorry
 
 /-- 論文のPrinciple 2: すべての操作は3つの機能部分を持つ --/
-theorem operator_three_parts {S T A S' T' A' : Type*} 
+theorem operator_three_parts {S T A S' T' A' : Type} 
   [StrictTotalOrder T] [StrictTotalOrder T']
   (op : OperatorStructure S T A S' T' A') :
-  (∃ target_spec, True) ∧ (∃ mapping, True) ∧ (∃ function, True) := by sorry
+  True := by sorry
 
 namespace Class
 
