@@ -255,6 +255,11 @@ theorem operator_three_parts {S T A S' T' A' : Type}
   (op : OperatorStructure S T A S' T' A') :
   True := by sorry
 
-/-!
 
 
+-- select
+-- aggregate
+-- accmulate
+-- restrict
+-- composiiton
+-- general
