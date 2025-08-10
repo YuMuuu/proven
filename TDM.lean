@@ -1,4 +1,6 @@
 import Init.Data.Nat.Basic
+import Mathlib.Data.List.Chain
+import Mathlib.Order.Basic
 
 /-!
 # 時系列データモデル（TDM）実装
@@ -18,57 +20,6 @@ import Init.Data.Nat.Basic
 「LOGICAL MODELING OF TEMPORAL DATA」で提示された形式モデルに基づいており、
 TSCを時系列データベースシステムの基本抽象化として導入しています。
 -/
-
-/--
-厳密全順序は、型τ上で厳密な順序関係を定義する数学的構造です。
-これは時系列が適切に順序付けられていることを保証するために基本的です。
-
-この関係は以下を満たす必要があります：
-- 非反射性：どの要素も自分自身と関係を持たない
-- 推移性：a < b かつ b < c ならば a < c
-- 三分律：任意の2つの要素について、a < b、a = b、b < a のうち正確に1つが成り立つ
--/
-class StrictTotalOrder (τ : Type u) where
-  /-- 厳密な小なり関係 -/
-  lt : τ → τ → Prop
-  /-- 非反射性：どの要素も自分自身より小さくない -/
-  irrefl : ∀ a, ¬ lt a a
-  /-- 推移性：a < b かつ b < c ならば a < c -/
-  trans : ∀ {a b c}, lt a b → lt b c → lt a c
-  /-- 三分律：任意の2つの要素について、正確に1つの関係が成り立つ -/
-  trichotomous : ∀ a b, lt a b ∨ a = b ∨ lt b a
-
-/--
-自然数は標準的な小なり関係の下で厳密全順序を形成します。
-このインスタンスは、自然数をタイムスタンプとして使用する
-時系列順序の基礎を提供します。
--/
-instance : StrictTotalOrder Nat where
-  lt := Nat.lt
-  irrefl := Nat.lt_irrefl
-  trans := Nat.lt_trans
-  trichotomous := fun a b => by
-    by_cases h1 : a < b
-    · left; exact h1
-    · by_cases h2 : a = b
-      · right; left; exact h2
-      · right; right
-        exact Nat.lt_of_not_le (fun h => h1 (Nat.lt_of_le_of_ne h h2))
-
-/--
-リストが厳密増加とは、各要素が次の要素より厳密に小さいことです。
-この性質は、タイムスタンプが順序通りでなければならない時系列にとって不可欠です。
-
-例：
-- `[]` は厳密増加（空虚に真）
-- `[5]` は厳密増加（単一要素）
-- `[1, 3, 7]` は厳密増加（1 < 3 < 7）
-- `[1, 1, 3]` は厳密増加ではない（1 ≮ 1）
--/
-def StrictlyIncreasing {τ : Type u} [sto : StrictTotalOrder τ] : List τ → Prop
-  | [] => True                                    -- 空リストは自明に順序付けられている
-  | [_] => True                                   -- 単一要素は自明に順序付けられている
-  | x::y::xs => sto.lt x y ∧ StrictlyIncreasing (y::xs)  -- 先頭 < 次 かつ 末尾が順序付けられている
 
 /--
 TSC型は、論文で定義された時系列コレクションの基本分類を表します。
@@ -115,13 +66,13 @@ TSCが意味を持つ有効な時間範囲を指定します。
 ライフスパンは start_point < end_point という制約を満たす必要があり、
 有効な時間区間を保証します。
 -/
-structure Lifespan (T : Type v) [StrictTotalOrder T] where
+structure Lifespan (T : Type v) [LinearOrder T] where
   /-- ライフスパンの開始時点 -/
   start_point : T
   /-- ライフスパンの終了時点 -/
   end_point : T
   /-- start_point が end_point より前であることの証明 -/
-  valid : StrictTotalOrder.lt start_point end_point
+  valid : LinearOrder.ext_lt start_point end_point
 
 /--
 時系列（TS）は単一のサロゲート（エンティティインスタンス）の時系列データを表します。
@@ -141,13 +92,13 @@ TSは以下を含みます：
 - seq = [(日1, ¥100), (日5, ¥150), (日10, ¥75)]
 - ordered = 日1 < 日5 < 日10 の証明
 -/
-structure TS (S : Type u) (T : Type v) (A : Type w) [StrictTotalOrder T] where
+structure TS (S : Type u) (T : Type v) (A : Type w) [LinearOrder T] where
   /-- サロゲート：エンティティインスタンスの識別子 -/
   s : S
   /-- 時系列：（タイムスタンプ、属性値）ペアのリスト -/
   seq : List (T × A)
   /-- タイムスタンプが厳密増加順であることの証明 -/
-  ordered : StrictlyIncreasing (τ := T) (seq.map Prod.fst)
+  ordered : List.Chain (fun p q => p.fst < q.fst) seq
   /-- この時系列の型分類 -/
   tsc_type : TSCType
   /-- この列で使用される時間粒度 -/
@@ -156,6 +107,9 @@ structure TS (S : Type u) (T : Type v) (A : Type w) [StrictTotalOrder T] where
   regularity : Regularity
   /-- この列の有効な時間範囲 -/
   lifespan : Lifespan T
+
+
+
 
 /--
 時系列コレクション（TSC）は時系列データモデルの主要な抽象化です。
@@ -173,7 +127,7 @@ TSCはその構成要素であるすべての時系列間で一様性を保証�
 - すべての口座が同じTSC性質を共有（stepwise_constant、日次粒度）
 - 操作をすべての口座に一様に適用できる
 -/
-structure TSC (S : Type u) (T : Type v) (A : Type w) [StrictTotalOrder T] where
+structure TSC (S : Type u) (T : Type v) (A : Type w) [LinearOrder T] where
   /-- 各サロゲートをその時系列にマッピングする関数 -/
   tsOf : S → TS S T A
   /-- 一様性制約：すべてのTSが同じ型を持つ -/
@@ -241,25 +195,190 @@ example : TSC Nat Nat Nat := {
   uniform_granularity := fun s₁ s₂ => rfl
 }
 
--- 論文のOperatorの性質
 
-/-- 論文のPrinciple 1: すべての操作は単一のターゲットTSCを生成 --/
-theorem operator_single_target {S T A S' T' A' : Type}
-  [StrictTotalOrder T] [StrictTotalOrder T']
-  (op : OperatorStructure S T A S' T' A') (source : TSC S T A) :
-  ∃ target : TSC S' T' A', True := by sorry
-
-/-- 論文のPrinciple 2: すべての操作は3つの機能部分を持つ --/
-theorem operator_three_parts {S T A S' T' A' : Type}
-  [StrictTotalOrder T] [StrictTotalOrder T']
-  (op : OperatorStructure S T A S' T' A') :
-  True := by sorry
+-- 以下はコメントアウト
 
 
+-- -- -- Predicate types for operations
+-- inductive Predicate (α : Type) where
+--   | surr_eq : Surrogate → Predicate α
+-- --   | surr_in : List Surrogate → Predicate α
+-- --   | time_eq : Time → Predicate α
+-- --   | time_in : List Time → Predicate α
+-- --   | time_range : Time → Time → Predicate α
+-- --   | attr_eq : α → Predicate α [DecidableEq α]
+-- --   | attr_gt : α → Predicate α [LT α]
+-- --   | attr_lt : α → Predicate α [LT α]
+-- --   | and : Predicate α → Predicate α → Predicate α
+-- --   | or : Predicate α → Predicate α → Predicate α
 
--- select
--- aggregate
--- accmulate
--- restrict
--- composiiton
--- general
+-- -- Time sequence specifications
+-- inductive TimeSequence where
+--   | v_last : Nat → Time → TimeSequence
+--   | v_next : Nat → Time → TimeSequence
+--   | t_last : Nat → Time → TimeSequence
+--   | t_next : Nat → Time → TimeSequence
+--   | begin : TimeSequence
+--   | end : TimeSequence
+
+-- -- Aggregation functions
+-- inductive AggregateFunction where
+--   | sum
+--   | avg
+--   | max
+--   | min
+--   | count
+--   deriving Repr
+
+-- -- Group specifications
+-- inductive GroupSpec where
+--   | time_unit : String → GroupSpec  -- "YEAR", "MONTH", "DAY", etc.
+--   | surrogate_attr : String → GroupSpec
+--   | integer : Nat → GroupSpec
+
+-- -- 1. SELECT Operation
+-- def select {α : Type} [DecidableEq α] (pred : Predicate α) (source : TSC α) : TSC α :=
+--   let filtered_data := source.data.filter (fun tv =>
+--     -- Simplified predicate evaluation (would need full implementation)
+--     match pred with
+--     | Predicate.surr_eq s => tv.s = s
+--     | Predicate.time_eq t => tv.t = t
+--     | Predicate.attr_eq a => tv.a = a
+--     | _ => true  -- Placeholder for complex predicates
+--   )
+--   { source with data := filtered_data }
+
+-- -- 2. AGGREGATE Operation
+-- def aggregate {α β : Type} [Add α] [Div α Nat] [Max α] [Min α]
+--   (func : AggregateFunction) (group_spec : GroupSpec) (source : TSC α) : TSC α :=
+--   -- Simplified implementation - would need proper grouping logic
+--   let grouped_data := source.data  -- Placeholder for grouping
+--   match func with
+--   | AggregateFunction.sum =>
+--     { source with
+--       data := grouped_data,
+--       tsc_type := TSCType.discrete }
+--   | AggregateFunction.avg =>
+--     { source with
+--       data := grouped_data,
+--       tsc_type := TSCType.discrete }
+--   | _ => source  -- Placeholder for other functions
+
+-- -- 3. ACCUMULATE Operation
+-- def accumulate {α : Type} [Add α] [Div α Nat]
+--   (func : AggregateFunction) (seq_spec : TimeSequence) (source : TSC α) : TSC α :=
+--   -- Simplified implementation for accumulation
+--   let accumulated_data := source.data.scanl (fun acc tv =>
+--     -- Placeholder for accumulation logic
+--     tv
+--   ) (source.data.head!)
+--   { source with
+--     data := accumulated_data.tail!,
+--     tsc_type := TSCType.discrete }
+
+-- -- 4. RESTRICT Operation
+-- def restrict {α : Type} [DecidableEq α]
+--   (aux_tsc : TSC α) (aux_pred : Predicate α) (source : TSC α) : TSC α :=
+--   let valid_surrogates := aux_tsc.data.filter (fun tv =>
+--     -- Evaluate predicate on auxiliary TSC
+--     match aux_pred with
+--     | Predicate.attr_gt _ => true  -- Placeholder
+--     | _ => true
+--   ) |>.map (·.s)
+
+--   let filtered_data := source.data.filter (fun tv =>
+--     valid_surrogates.contains tv.s
+--   )
+--   { source with data := filtered_data }
+
+-- -- 5. COMPOSE Operation (Pairwise)
+-- def compose_pairwise {α β γ : Type}
+--   (func : α → β → γ) (source1 : TSC α) (source2 : TSC β) : TSC γ :=
+--   let combined_data := source1.data.zip source2.data |>.map (fun (tv1, tv2) =>
+--     { s := tv1.s, t := tv1.t, a := func tv1.a tv2.a : TemporalValue γ }
+--   )
+--   { data := combined_data,
+--     granularity := source1.granularity,
+--     lifespan := source1.lifespan,
+--     regularity := source1.regularity,
+--     tsc_type := TSCType.discrete }
+
+-- -- 6. COMPOSE Operation (By Surrogate)
+-- def compose_by_surrogate {α β γ : Type}
+--   (func : α → β → γ) (single_surr_tsc : TSC α) (multi_tsc : TSC β) : TSC γ :=
+--   -- Apply single surrogate row to each row of multi_tsc
+--   let single_row := single_surr_tsc.data.head!
+--   let combined_data := multi_tsc.data.map (fun tv =>
+--     { s := tv.s, t := tv.t, a := func single_row.a tv.a : TemporalValue γ }
+--   )
+--   { data := combined_data,
+--     granularity := multi_tsc.granularity,
+--     lifespan := multi_tsc.lifespan,
+--     regularity := multi_tsc.regularity,
+--     tsc_type := TSCType.discrete }
+
+-- -- 7. COMPOSE Operation (By Time)
+-- def compose_by_time {α β γ : Type}
+--   (func : α → β → γ) (single_time_tsc : TSC α) (multi_tsc : TSC β) : TSC γ :=
+--   -- Apply single time column to each column of multi_tsc
+--   let single_time_data := single_time_tsc.data.head!
+--   let combined_data := multi_tsc.data.map (fun tv =>
+--     { s := tv.s, t := tv.t, a := func single_time_data.a tv.a : TemporalValue γ }
+--   )
+--   { data := combined_data,
+--     granularity := multi_tsc.granularity,
+--     lifespan := multi_tsc.lifespan,
+--     regularity := multi_tsc.regularity,
+--     tsc_type := multi_tsc.tsc_type }
+
+-- -- Helper functions for creating TSCs
+-- def create_tsc {α : Type} (data : List (TemporalValue α))
+--   (granularity : String) (start_time end_time : Time)
+--   (regularity : Regularity) (tsc_type : TSCType) : TSC α :=
+--   { data := data,
+--     granularity := granularity,
+--     lifespan := { start_point := start_time, end_point := end_time },
+--     regularity := regularity,
+--     tsc_type := tsc_type }
+
+-- -- Example usage functions
+-- def example_book_sales : TSC Nat :=
+--   let data := [
+--     { s := ⟨1462⟩, t := ⟨1⟩, a := 57 },
+--     { s := ⟨1462⟩, t := ⟨4⟩, a := 50 },
+--     { s := ⟨1462⟩, t := ⟨6⟩, a := 65 },
+--     { s := ⟨1462⟩, t := ⟨9⟩, a := 60 },
+--     { s := ⟨2526⟩, t := ⟨1⟩, a := 35 },
+--     { s := ⟨2526⟩, t := ⟨3⟩, a := 45 },
+--     { s := ⟨2526⟩, t := ⟨7⟩, a := 55 }
+--   ]
+--   create_tsc data "day" ⟨1⟩ ⟨9⟩ Regularity.irregular TSCType.stepwise_constant
+
+-- def example_book_prices : TSC Nat :=
+--   let data := [
+--     { s := ⟨1462⟩, t := ⟨1⟩, a := 100 },
+--     { s := ⟨1462⟩, t := ⟨4⟩, a := 95 },
+--     { s := ⟨1462⟩, t := ⟨6⟩, a := 105 },
+--     { s := ⟨1462⟩, t := ⟨9⟩, a := 110 },
+--     { s := ⟨2526⟩, t := ⟨1⟩, a := 80 },
+--     { s := ⟨2526⟩, t := ⟨3⟩, a := 85 },
+--     { s := ⟨2526⟩, t := ⟨7⟩, a := 90 }
+--   ]
+--   create_tsc data "day" ⟨1⟩ ⟨9⟩ Regularity.irregular TSCType.stepwise_constant
+
+-- -- Example: Calculate book revenues (quantity × price)
+-- def example_book_revenue : TSC Nat :=
+--   compose_pairwise (· * ·) example_book_sales example_book_prices
+
+-- -- Example: Select books with sales > 50
+-- def example_high_sales : TSC Nat :=
+--   select (Predicate.attr_gt 50) example_book_sales
+
+-- #check select
+-- #check aggregate
+-- #check accumulate
+-- #check restrict
+-- #check compose_pairwise
+-- #check compose_by_surrogate
+-- #check compose_by_time
+-- #check example_book_revenue
