@@ -2,6 +2,10 @@ name = "proven"
 version = "0.1.0"
 defaultTargets = ["proven", "LTL", "LO"]
 
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4.git"
+
 [[lean_lib]]
 name = "Proven"
 roots = ["Proven"]
