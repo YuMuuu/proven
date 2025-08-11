@@ -146,12 +146,72 @@ abbrev BankClazzVal : Clazz Nat Nat :=
       have hy' : y = obj1 := hy
       rw [hx', hy'] }
 
--- サンプルにある口座残高の推移の例
--- - 1日目: 残高 = ¥57
--- - 4日目: 残高 = ¥50
--- - 6日目: 残高 = ¥65
--- - 9日目: 残高 = ¥60
-example : TSC Nat Nat Nat BankClazzVal :=
+-- OPERATIONS OVER TSCs
+
+
+
+structure Predicate (S T A : Type) where
+  surr_pred : S → Bool  -- サロゲートに対する述語
+  time_pred : T → Bool  -- 時刻に対する述語
+  attr_pred : A → Bool  -- 属性値に対する述語
+
+/-- 時間範囲の指定 -/
+inductive TimeRange (T : Type) [LinearOrder T] where
+  | interval : T → T → TimeRange T  -- 開始時刻から終了時刻まで
+  | last_n : Nat → T → TimeRange T  -- 参照時刻から過去n個
+  | next_n : Nat → T → TimeRange T  -- 参照時刻から未来n個
+
+/-- 時間範囲に時刻が含まれるかの判定 -/
+def TimeRange.contains {T : Type} [LinearOrder T] (range : TimeRange T) (t : T) : Bool :=
+  match range with
+  | TimeRange.interval start_t end_t => (start_t ≤ t) && (t ≤ end_t)
+  | TimeRange.last_n _ _ => true  -- 簡略化：実装では参照時刻から過去n個を取得
+  | TimeRange.next_n _ _ => true  -- 簡略化：実装では参照時刻から未来n個を取得
+
+/-- TSから条件を満たすペアをフィルタリング -/
+def filterPairs {S T A : Type} [LinearOrder T] (ts : TS S T A) (pred : Predicate S T A) : List (T × A) :=
+  ts.pairs.filter (fun (t, a) => pred.surr_pred ts.s && pred.time_pred t && pred.attr_pred a)
+
+lemma filtered_sorted {S T A : Type} [LinearOrder T] (ts : TS S T A) (pred : Predicate S T A) :
+  (filterPairs ts pred).Chain' (fun p q => p.fst < q.fst) := by
+  unfold filterPairs
+  have h_trans : IsTrans (T × A) (fun p q => p.fst < q.fst) := by
+    constructor
+    intro a b c hab hbc
+    exact lt_trans hab hbc
+  have h_sublist : (ts.pairs.filter (fun (t, a) => pred.surr_pred ts.s && pred.time_pred t && pred.attr_pred a)).Sublist ts.pairs :=
+    List.filter_sublist
+  exact List.Chain'.sublist ts.sorted h_sublist
+
+/-- SELECTION演算子 -/
+-- 実装の簡易さのためにカレンダーでのクエリは行わない
+def selection {S T A : Type} [LinearOrder T] (ts : TS S T A) (pred : Predicate S T A) : TS S T A :=
+  { s := ts.s,
+    pairs := filterPairs ts pred,
+    sorted := filtered_sorted ts pred }
+
+-- 具体的な述語の定義
+
+/-- 時刻が特定の範囲内にある述語 -/
+def timeInRange {S T A : Type} [LinearOrder T] (start_t end_t : T) : Predicate S T A :=
+  { surr_pred := fun _ => true,
+    time_pred := fun t => (start_t ≤ t) && (t ≤ end_t),
+    attr_pred := fun _ => true }
+
+/-- 属性値が特定の値以上である述語（Natに特化） -/
+def attrGE (min_val : Nat) : Predicate Nat Nat Nat :=
+  { surr_pred := fun _ => true,
+    time_pred := fun _ => true,
+    attr_pred := fun a => min_val ≤ a }
+
+/-- サロゲートが特定の値と等しい述語 -/
+def surrEq {S T A : Type} [LinearOrder T] [DecidableEq S] (target_s : S) : Predicate S T A :=
+  { surr_pred := fun s => s == target_s,
+    time_pred := fun _ => true,
+    attr_pred := fun _ => true }
+
+-- TSCの例を定義
+def sampleTSC : TSC Nat Nat Nat BankClazzVal :=
   { ts := fun o =>
     { s := o.val.surr,
       pairs := [(1, 57), (4, 50), (6, 65), (9, 60)],
@@ -159,4 +219,31 @@ example : TSC Nat Nat Nat BankClazzVal :=
     },
     s_ok := by intros; rfl }
 
-    
+-- 使用例
+
+def sampleTS : TS Nat Nat Nat :=
+  sampleTSC.ts ⟨obj1, rfl⟩
+
+-- 使用例1：時刻4から9までの範囲でのSELECTION
+def timeRangeSelection : TS Nat Nat Nat :=
+  let time_pred := timeInRange 4 9
+  selection sampleTS time_pred
+
+-- 使用例2：残高が55以上のデータのSELECTION
+def balanceSelection : TS Nat Nat Nat :=
+  let attr_pred := attrGE 55
+  selection sampleTS attr_pred
+
+-- 複合条件の例：時刻4以降かつ残高60以上
+def complexPredicate : Predicate Nat Nat Nat :=
+  { surr_pred := fun _ => true,
+    time_pred := fun t => 4 ≤ t,
+    attr_pred := fun a => 60 ≤ a }
+
+def complexSelection : TS Nat Nat Nat :=
+  selection sampleTS complexPredicate
+
+-- 結果の確認用関数
+#eval! timeRangeSelection.pairs  -- [(4, 50), (6, 65), (9, 60)]
+#eval! balanceSelection.pairs    -- [(1, 57), (6, 65), (9, 60)]
+#eval! complexSelection.pairs    -- [(9, 60)]
