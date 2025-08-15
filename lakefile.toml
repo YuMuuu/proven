@@ -1,6 +1,5 @@
 name = "proven"
 version = "0.1.0"
-defaultTargets = ["proven", "LTL"]
 defaultTargets = ["proven", "LTL", "LO", "TDM"]
 
 [[require]]
