@@ -1,6 +1,6 @@
 name = "proven"
 version = "0.1.0"
-defaultTargets = ["proven", "LTL", "LO", "TDM"]
+defaultTargets = ["proven", "LTL", "LO", "TDM", "MTL"]
 
 [[require]]
 name = "mathlib"
@@ -20,6 +20,10 @@ roots = ["logic_operator"]
 
 [[lean_lib]]
 name = "TDM"
+root = "."
+
+[[lean_lib]]
+name = "MTL"
 root = "."
 
 [[lean_exe]]
