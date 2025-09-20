@@ -10,8 +10,8 @@ inductive LTL (α : Type) where
   | next : LTL α → LTL α
   | until : LTL α → LTL α → LTL α
   | release : LTL α → LTL α → LTL α
-  | eventually : LTL α → LTL α    -- F φ ≡ true U φ
-  | always     : LTL α → LTL α    -- G φ ≡ false R φ
+  | finaly : LTL α → LTL α    -- F φ ≡ true U φ
+  | globally     : LTL α → LTL α    -- G φ ≡ false R φ
 
 -- 無限列: 各時点で真な原子命題の集合
 abbrev MyStream (α : Type) := Nat → α
@@ -29,8 +29,8 @@ def holds {α : Type} (σ : MyModel α) (i : Nat) : LTL α → Prop
   | LTL.release φ ψ => ∀ j, j ≥ i →
         holds σ j ψ ∨
         ∃ k, k ≥ i ∧ holds σ k φ ∧ ∀ m, (i ≤ m ∧ m ≤ k) → holds σ m ψ
-  | LTL.eventually φ => ∃ j, j ≥ i ∧ holds σ j φ
-  | LTL.always φ     => ∀ j, j ≥ i → holds σ j φ
+  | LTL.finaly φ => ∃ j, j ≥ i ∧ holds σ j φ
+  | LTL.globally φ     => ∀ j, j ≥ i → holds σ j φ
 
 -- 追加公理
 axiom until_intro_premise {α : Type} (φ ψ : LTL α) (σ : MyModel α) (i : Nat) :
@@ -48,7 +48,7 @@ inductive Provable {α : Type} : LTL α → Prop where
   | mp (φ ψ : LTL α) :
       Provable (LTL.impl φ ψ) → Provable φ → Provable ψ
   | next_rule (φ : LTL α) :
-      Provable (LTL.always φ) → Provable (LTL.next φ)  -- G φ → X φ
+      Provable (LTL.globally φ) → Provable (LTL.next φ)  -- G φ → X φ
   | until_intro (φ ψ : LTL α) :
       Provable ψ →
       Provable (LTL.impl φ (LTL.next (LTL.until φ ψ))) →
@@ -76,8 +76,8 @@ theorem soundness {α : Type} (φ : LTL α) :
       intro σ i
       -- G φ → X φ
       simp [holds]
-      have h_always := ih σ i
-      exact h_always (i+1) (Nat.le_succ i)
+      have h_globally := ih σ i
+      exact h_globally (i+1) (Nat.le_succ i)
   | until_intro φ ψ _ _ ihψ ih_impl =>
       intro σ i
       -- 目標: holds σ i (φ U ψ)
