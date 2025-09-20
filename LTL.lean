@@ -3,7 +3,6 @@ import Init.Data.Nat.Basic
 -- LTL式の定義
 inductive LTL (α : Type) where
   | atom : α → LTL α
-  | bot  : LTL α
   | not  : LTL α → LTL α
   | and  : LTL α → LTL α → LTL α
   | or   : LTL α → LTL α → LTL α
@@ -21,7 +20,6 @@ abbrev MyModel (α : Type) := MyStream (α → Prop)
 -- 意味論
 def holds {α : Type} (σ : MyModel α) (i : Nat) : LTL α → Prop
   | LTL.atom p      => σ i p
-  | LTL.bot         => False
   | LTL.not φ       => ¬ holds σ i φ
   | LTL.and φ ψ     => holds σ i φ ∧ holds σ i ψ
   | LTL.or φ ψ      => holds σ i φ ∨ holds σ i ψ
