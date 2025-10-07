@@ -29,3 +29,7 @@ root = "."
 [[lean_exe]]
 name = "proven"
 root = "Main"
+
+[[lean_udm]]
+name="UDM"
+root="."
